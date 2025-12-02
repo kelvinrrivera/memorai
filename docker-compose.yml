@@ -1,102 +1,114 @@
 services:
   # ========================================
-  # 🛡️ SECURITY GATEWAY (NGINX)
+  # 🛡️ SECURITY PROXY (NGINX) - GATEWAY ÚNICO
   # ========================================
   auth-proxy:
     image: nginx:alpine
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
-      # Puerto 8000 del Host -> Puerto 8000 del Nginx (Mem0)
-      - "8000:8000"
-      # Puerto 8001 del Host -> Puerto 8001 del Nginx (Cognee)
-      - "8001:8001"
+      - "8000:8000" # Mem0 API
+      - "8001:8001" # Cognee API
+      - "8002:8002" # Mem0 MCP
+      - "8003:8003" # Cognee MCP (NUEVO)
     depends_on:
       - mem0-api
       - cognee-api
+      - mem0-mcp
+      - cognee-mcp
     networks:
       - memory-stack-network
     restart: always
 
   # ========================================
-  # 🧠 MEM0 API
+  # 🧠 MEM0 STACK (API + MCP)
   # ========================================
   mem0-api:
     build:
       context: https://github.com/mem0ai/mem0.git#main
       dockerfile: server/dev.Dockerfile
-    # SIN PORTS PÚBLICOS
     environment:
       - MEM0_API_KEY=${MEM0_API_KEY}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
-      - POSTGRES_DB=mem0_db    # Base de datos aislada
+      - POSTGRES_DB=mem0_db
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
       - NEO4J_URI=${NEO4J_URI}
       - NEO4J_USERNAME=${NEO4J_USERNAME}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - MEM0_HISTORY_DB_PATH=/app/data/history.db
+    volumes:
+      - mem0_data:/app/data
     command: >
       sh -c "pip install psycopg[pool] --upgrade && uvicorn main:app --host 0.0.0.0 --port 8000"
     depends_on:
       postgres:
         condition: service_healthy
-      neo4j:
-        condition: service_healthy
     networks:
       - memory-stack-network
 
-  # ========================================
-  # 🔌 MEM0 MCP SERVER (SSE)
-  # ========================================
   mem0-mcp:
-    # Usamos una imagen ligera de Python para correr el servidor MCP
     image: python:3.11-slim
     environment:
-      - MEM0_API_URL=http://mem0-api:8000
-      - MEM0_API_KEY=${MEM0_API_KEY}
-      - PORT=3028
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=mem0_db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./mcp_server.py:/app/mcp_server.py
+    working_dir: /app
     command: >
-      sh -c "pip install mcp-mem0 uvicorn && 
-             python -m mcp_mem0.server --host 0.0.0.0 --port 3028"
+      sh -c "pip install mem0ai mcp starlette uvicorn psycopg2-binary &&
+             uvicorn mcp_server:starlette_app --host 0.0.0.0 --port 3000"
     networks:
       - memory-stack-network
 
   # ========================================
-  # 🎯 COGNEE API
+  # 🎯 COGNEE STACK (API + MCP OFICIAL)
   # ========================================
   cognee-api:
     image: cognee/cognee:latest
-    # SIN PORTS PÚBLICOS
-    environment:
+    environment: &cognee_env
       - ENV=production
       - REQUIRE_AUTHENTICATION=false
+      # Postgres (Particionado)
       - DB_PROVIDER=postgres
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_NAME=cognee_db     # Base de datos aislada
+      - DB_NAME=cognee_db
       - DB_USERNAME=postgres
       - DB_PASSWORD=postgres
+      # Vector (Usamos PGVector para ahorrar RAM, igual que tu stack optimizado)
       - VECTOR_DB_PROVIDER=PGVector
       - VECTOR_DB_HOST=postgres
       - VECTOR_DB_PORT=5432
       - VECTOR_DB_NAME=cognee_db
+      # Graph
       - GRAPH_DB_PROVIDER=neo4j
       - NEO4J_URI=${NEO4J_URI}
       - NEO4J_USERNAME=${NEO4J_USERNAME}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
       - LLM_API_KEY=${OPENAI_API_KEY}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      neo4j:
-        condition: service_healthy
+    networks:
+      - memory-stack-network
+
+  cognee-mcp:
+    image: cognee/cognee:latest
+    # Reutilizamos las variables de entorno para que apunte a la misma DB
+    environment: 
+      <<: *cognee_env
+      - TRANSPORT_MODE=sse   # <--- ACTIVADOR MODO MCP OFICIAL
+      - MCP_LOG_LEVEL=INFO
+    # Cognee en modo SSE suele escuchar en 8000 o 8001, lo mapearemos en Nginx
     networks:
       - memory-stack-network
 
   # ========================================
-  # 🐘 POSTGRESQL (MULTI-TENANT)
+  # 🐘 INFRAESTRUCTURA COMPARTIDA
   # ========================================
   postgres:
     image: ankane/pgvector:v0.5.1
@@ -114,9 +126,6 @@ services:
     networks:
       - memory-stack-network
 
-  # ========================================
-  # 📦 SERVICIOS DE SOPORTE
-  # ========================================
   redis:
     image: redis:7-alpine
     command: redis-server --appendonly yes
@@ -131,7 +140,6 @@ services:
       - NEO4J_AUTH=${NEO4J_USERNAME}/${NEO4J_PASSWORD}
       - NEO4J_PLUGINS=["apoc"]
       - NEO4J_dbms_memory_heap_initial__size=512m
-      - NEO4J_dbms_memory_heap_max__size=1G
     volumes:
       - neo4j_data:/data
     healthcheck:
@@ -144,6 +152,7 @@ volumes:
   postgres_data:
   redis_data:
   neo4j_data:
+  mem0_data:
 
 networks:
   memory-stack-network:
