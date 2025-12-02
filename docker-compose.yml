@@ -1,6 +1,6 @@
 services:
   # ========================================
-  # 🛡️ SECURITY PROXY (NGINX) - GATEWAY ÚNICO
+  # 🛡️ SECURITY PROXY (NGINX) - GATEWAY
   # ========================================
   auth-proxy:
     image: nginx:alpine
@@ -10,7 +10,7 @@ services:
       - "8000:8000" # Mem0 API
       - "8001:8001" # Cognee API
       - "8002:8002" # Mem0 MCP
-      - "8003:8003" # Cognee MCP (NUEVO)
+      - "8003:8003" # Cognee MCP
     depends_on:
       - mem0-api
       - cognee-api
@@ -27,19 +27,26 @@ services:
     build:
       context: https://github.com/mem0ai/mem0.git#main
       dockerfile: server/dev.Dockerfile
+    # ⚠️ FIX CRÍTICO: Ejecutar como root para permitir crear la DB interna
+    user: root 
     environment:
       - MEM0_API_KEY=${MEM0_API_KEY}
+      # Conexión Vectorial (Postgres)
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_DB=mem0_db
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
+      # Conexión Grafos (Neo4j)
       - NEO4J_URI=${NEO4J_URI}
       - NEO4J_USERNAME=${NEO4J_USERNAME}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      # LLM
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # Definir ruta explícita para la DB de historial
       - MEM0_HISTORY_DB_PATH=/app/data/history.db
     volumes:
+      # Volumen persistente para que no pierdas el historial al reiniciar
       - mem0_data:/app/data
     command: >
       sh -c "pip install psycopg[pool] --upgrade && uvicorn main:app --host 0.0.0.0 --port 8000"
@@ -68,26 +75,26 @@ services:
       - memory-stack-network
 
   # ========================================
-  # 🎯 COGNEE STACK (API + MCP OFICIAL)
+  # 🎯 COGNEE STACK (PURO POSTGRES)
   # ========================================
   cognee-api:
     image: cognee/cognee:latest
-    environment:
+    environment: &cognee_env
       - ENV=production
       - REQUIRE_AUTHENTICATION=false
-      # Postgres (Particionado)
+      # 1. Base de Datos Relacional (Metadatos) -> POSTGRES
       - DB_PROVIDER=postgres
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=cognee_db
       - DB_USERNAME=postgres
       - DB_PASSWORD=postgres
-      # Vector (Usamos PGVector para ahorrar RAM, igual que tu stack optimizado)
+      # 2. Base de Datos Vectorial -> PGVECTOR (Postgres)
       - VECTOR_DB_PROVIDER=PGVector
       - VECTOR_DB_HOST=postgres
       - VECTOR_DB_PORT=5432
       - VECTOR_DB_NAME=cognee_db
-      # Graph
+      # 3. Base de Datos Grafos -> NEO4J
       - GRAPH_DB_PROVIDER=neo4j
       - NEO4J_URI=${NEO4J_URI}
       - NEO4J_USERNAME=${NEO4J_USERNAME}
@@ -98,39 +105,19 @@ services:
 
   cognee-mcp:
     image: cognee/cognee:latest
-    # Reutilizamos las variables de entorno para que apunte a la misma DB
     environment: 
-      - ENV=production
-      - REQUIRE_AUTHENTICATION=false
-      # Postgres (Particionado)
-      - DB_PROVIDER=postgres
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=cognee_db
-      - DB_USERNAME=postgres
-      - DB_PASSWORD=postgres
-      # Vector (Usamos PGVector para ahorrar RAM, igual que tu stack optimizado)
-      - VECTOR_DB_PROVIDER=PGVector
-      - VECTOR_DB_HOST=postgres
-      - VECTOR_DB_PORT=5432
-      - VECTOR_DB_NAME=cognee_db
-      # Graph
-      - GRAPH_DB_PROVIDER=neo4j
-      - NEO4J_URI=${NEO4J_URI}
-      - NEO4J_USERNAME=${NEO4J_USERNAME}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
-      - LLM_API_KEY=${OPENAI_API_KEY}
-      - TRANSPORT_MODE=sse   # <--- ACTIVADOR MODO MCP OFICIAL
+      <<: *cognee_env
+      - TRANSPORT_MODE=sse # Activa modo MCP
       - MCP_LOG_LEVEL=INFO
-    # Cognee en modo SSE suele escuchar en 8000 o 8001, lo mapearemos en Nginx
     networks:
       - memory-stack-network
 
   # ========================================
-  # 🐘 INFRAESTRUCTURA COMPARTIDA
+  # 🐘 INFRAESTRUCTURA (POSTGRES OFICIAL)
   # ========================================
   postgres:
-    image: ankane/pgvector:v0.5.1
+    # Usamos la imagen oficial de PGVector basada en Postgres 16
+    image: pgvector/pgvector:pg16
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
