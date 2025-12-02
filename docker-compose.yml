@@ -79,7 +79,7 @@ services:
   # ========================================
   cognee-api:
     image: cognee/cognee:latest
-    environment: &cognee_env
+    environment:
       - ENV=production
       - REQUIRE_AUTHENTICATION=false
       # 1. Base de Datos Relacional (Metadatos) -> POSTGRES
@@ -106,7 +106,26 @@ services:
   cognee-mcp:
     image: cognee/cognee:latest
     environment: 
-      <<: *cognee_env
+      - ENV=production
+      - REQUIRE_AUTHENTICATION=false
+      # 1. Base de Datos Relacional (Metadatos) -> POSTGRES
+      - DB_PROVIDER=postgres
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=cognee_db
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=postgres
+      # 2. Base de Datos Vectorial -> PGVECTOR (Postgres)
+      - VECTOR_DB_PROVIDER=PGVector
+      - VECTOR_DB_HOST=postgres
+      - VECTOR_DB_PORT=5432
+      - VECTOR_DB_NAME=cognee_db
+      # 3. Base de Datos Grafos -> NEO4J
+      - GRAPH_DB_PROVIDER=neo4j
+      - NEO4J_URI=${NEO4J_URI}
+      - NEO4J_USERNAME=${NEO4J_USERNAME}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - LLM_API_KEY=${OPENAI_API_KEY}
       - TRANSPORT_MODE=sse # Activa modo MCP
       - MCP_LOG_LEVEL=INFO
     networks:
