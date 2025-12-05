@@ -49,7 +49,7 @@ services:
       # Volumen persistente para que no pierdas el historial al reiniciar
       - mem0_data:/app/data
     command: >
-      sh -c "mkdir -p /app/data && pip install psycopg[pool] --upgrade && uvicorn main:app --host 0.0.0.0 --port 8000"
+      sh -c "mkdir -p /app/data && chmod 777 /app/data && pip install psycopg[pool] --upgrade && uvicorn main:app --host 0.0.0.0 --port 8000"
     depends_on:
       postgres:
         condition: service_healthy
