@@ -12,7 +12,7 @@ from starlette.responses import JSONResponse
 # Configurar Mem0 Cliente
 config = {
     "vector_store": {
-        "provider": "postgres",
+        "provider": "pgvector",
         "config": {
             "user": os.getenv("POSTGRES_USER", "postgres"),
             "password": os.getenv("POSTGRES_PASSWORD", "postgres"),

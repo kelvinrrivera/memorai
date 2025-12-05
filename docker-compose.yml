@@ -49,12 +49,13 @@ services:
       # Volumen persistente para que no pierdas el historial al reiniciar
       - mem0_data:/app/data
     command: >
-      sh -c "pip install psycopg[pool] --upgrade && uvicorn main:app --host 0.0.0.0 --port 8000"
+      sh -c "mkdir -p /app/data && pip install psycopg[pool] --upgrade && uvicorn main:app --host 0.0.0.0 --port 8000"
     depends_on:
       postgres:
         condition: service_healthy
-    networks:
-      - memory-stack-network
+    restart: always
+    #networks:
+    #  - memory-stack-network
 
   mem0-mcp:
     image: python:3.11-slim
@@ -71,8 +72,9 @@ services:
     command: >
       sh -c "pip install mem0ai mcp starlette uvicorn psycopg2-binary &&
              uvicorn mcp_server:starlette_app --host 0.0.0.0 --port 3000"
-    networks:
-      - memory-stack-network
+    restart: always
+    #networks:
+     # - memory-stack-network
 
   # ========================================
   # 🎯 COGNEE STACK (PURO POSTGRES)
@@ -100,8 +102,9 @@ services:
       - NEO4J_USERNAME=${NEO4J_USERNAME}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
       - LLM_API_KEY=${OPENAI_API_KEY}
-    networks:
-      - memory-stack-network
+    restart: always
+    #networks:
+    #  - memory-stack-network
 
   cognee-mcp:
     image: cognee/cognee:latest
@@ -128,6 +131,7 @@ services:
       - LLM_API_KEY=${OPENAI_API_KEY}
       - TRANSPORT_MODE=sse # Activa modo MCP
       - MCP_LOG_LEVEL=INFO
+    restart: always
     networks:
       - memory-stack-network
 
