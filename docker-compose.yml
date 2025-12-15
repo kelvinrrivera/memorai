@@ -7,74 +7,15 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     #ports:
-    #  - "8000:8000" # Mem0 API
     #  - "8001:8001" # Cognee API
-    #  - "8002:8002" # Mem0 MCP
     #  - "8003:8003" # Cognee MCP
     depends_on:
-      - mem0-api
       - cognee-api
-      - mem0-mcp
       - cognee-mcp
     #networks:
     #  - memory-stack-network
     restart: always
 
-  # ========================================
-  # 🧠 MEM0 STACK (API + MCP)
-  # ========================================
-  mem0-api:
-    build:
-      context: https://github.com/mem0ai/mem0.git#main
-      dockerfile: server/dev.Dockerfile
-    # ⚠️ FIX CRÍTICO: Ejecutar como root para permitir crear la DB interna
-    user: root 
-    environment:
-      - MEM0_API_KEY=${MEM0_API_KEY}
-      # Conexión Vectorial (Postgres)
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=mem0_db
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      # Conexión Grafos (Neo4j)
-      - NEO4J_URI=${NEO4J_URI}
-      - NEO4J_USERNAME=${NEO4J_USERNAME}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
-      # LLM
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      # Definir ruta explícita para la DB de historial
-      - MEM0_HISTORY_DB_PATH=/app/data/history.db
-    volumes:
-      # Volumen persistente para que no pierdas el historial al reiniciar
-      - mem0_data:/app/data
-    command: >
-      sh -c "mkdir -p /app/data && chmod 777 /app/data && pip install psycopg[pool] --upgrade && uvicorn main:app --host 0.0.0.0 --port 8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: always
-    #networks:
-    #  - memory-stack-network
-
-  mem0-mcp:
-    image: python:3.11-slim
-    environment:
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=mem0_db
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-    volumes:
-      - ./mcp_server.py:/app/mcp_server.py
-    working_dir: /app
-    command: >
-      sh -c "pip install mem0ai mcp starlette uvicorn psycopg2-binary &&
-             uvicorn mcp_server:starlette_app --host 0.0.0.0 --port 3000"
-    restart: always
-    #networks:
-     # - memory-stack-network
 
   # ========================================
   # 🎯 COGNEE STACK (PURO POSTGRES)
@@ -177,11 +118,31 @@ services:
     #networks:
     #  - memory-stack-network
 
+  # ========================================
+  # 💻 SAAS FRONTEND (NEXT.JS)
+  # ========================================
+  saas-app:
+    build:
+      context: ./saas-app
+      dockerfile: Dockerfile
+    environment:
+      - COGNEE_API_URL=http://cognee-api:8000
+      - NEXT_PUBLIC_API_URL=http://localhost:3000/api
+    volumes:
+      - ./saas-app:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    depends_on:
+      - cognee-api
+    restart: always
+    #networks:
+    #  - memory-stack-network
+
 volumes:
   postgres_data:
   redis_data:
   neo4j_data:
-  mem0_data:
 
 #networks:
 #  memory-stack-network:
