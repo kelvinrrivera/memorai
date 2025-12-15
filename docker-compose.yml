@@ -118,26 +118,6 @@ services:
     #networks:
     #  - memory-stack-network
 
-  # ========================================
-  # 💻 SAAS FRONTEND (NEXT.JS)
-  # ========================================
-  saas-app:
-    build:
-      context: ./saas-app
-      dockerfile: Dockerfile
-    environment:
-      - COGNEE_API_URL=http://cognee-api:8000
-      - NEXT_PUBLIC_API_URL=http://localhost:3000/api
-    volumes:
-      - ./saas-app:/app
-      - /app/node_modules
-    ports:
-      - "3000:3000"
-    depends_on:
-      - cognee-api
-    restart: always
-    #networks:
-    #  - memory-stack-network
 
 volumes:
   postgres_data:
