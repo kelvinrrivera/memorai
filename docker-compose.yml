@@ -72,6 +72,8 @@ services:
       - LLM_API_KEY=${OPENAI_API_KEY}
       - TRANSPORT_MODE=sse # Activa modo MCP
       - MCP_LOG_LEVEL=INFO
+    volumes:
+      - ./patches/server_multitenant.py:/app/src/server.py
     restart: always
     #networks:
     #  - memory-stack-network
