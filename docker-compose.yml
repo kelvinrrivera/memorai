@@ -48,7 +48,7 @@ services:
     #  - memory-stack-network
 
   cognee-mcp:
-    image: cognee/cognee:latest
+    image: cognee/cognee-mcp:latest
     environment: 
       - ENV=production
       - REQUIRE_AUTHENTICATION=false
