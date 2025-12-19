@@ -112,10 +112,6 @@ services:
       - NEO4J_AUTH=${NEO4J_USERNAME}/${NEO4J_PASSWORD}
       - NEO4J_PLUGINS=["apoc"]
       - NEO4J_dbms_memory_heap_initial__size=512m
-      # Habilitar conexiones SSL/TLS para Bolt
-      - NEO4J_server_bolt_tls__level=OPTIONAL
-      - NEO4J_dbms_connector_bolt_enabled=true
-      - NEO4J_dbms_connector_https_enabled=true
     volumes:
       - neo4j_data:/data
     healthcheck:
