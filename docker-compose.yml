@@ -108,10 +108,6 @@ services:
 
   neo4j:
     image: neo4j:5.26.4
-    ports:
-      - "7474:7474"  # HTTP Browser
-      - "7473:7473"  # HTTPS Browser
-      - "7687:7687"  # Bolt Protocol
     environment:
       - NEO4J_AUTH=${NEO4J_USERNAME}/${NEO4J_PASSWORD}
       - NEO4J_PLUGINS=["apoc"]
